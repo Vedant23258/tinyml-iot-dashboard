@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TinyML Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ...all previously provided styles remain unchanged... */
+    * { margin: 0; padding: 0; box-sizing: border-box;}
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: radial-gradient(circle at top left, #0f0c29 45%, #302b63 70%, #24243e 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 0;
+      overflow-x: hidden;
+      position: relative;
+    }
+    .section { display: none; animation: fadeIn 0.8s cubic-bezier(.66,-0.21,.42,1.27); min-height: 100vh; transition: all 0.6s cubic-bezier(.66,-0.21,.42,1.27); width: 100%;}
+    .active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(30px) scale(0.97);} to   { opacity: 1; transform: translateY(0) scale(1);}}
+    h1, h2 { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 800; letter-spacing: 1px; text-align: center; margin-bottom: 20px; padding: 12px 0 6px 0; color: #0fe7c4; text-shadow: 0 3px 12px #1e345e52; background: none;}
+    h2 { color: #0fe7c4; text-shadow: 0 3px 8px #1e345e33; margin-bottom: 12px; font-size: 1.4em;}
+    .btn { padding: 15px 40px; font-size: 1.2em; border: none; border-radius: 30px; background: linear-gradient(135deg, #18b1ff 10%, #0fe7c4 60%, #5352ec 100%); color: #fff; cursor: pointer; box-shadow: 0 0 18px #fff1, 0 0 30px #0fe7c489 inset; transition: transform 0.3s cubic-bezier(.66,-0.21,.42,1.27), box-shadow 0.3s; font-weight: 600; min-width: 180px; z-index: 2; letter-spacing: 0.5px;}
+    .btn:hover { transform: scale(1.07); box-shadow: 0 0 30px #fff6, 0 0 48px #00b4d88f;}
+    .card, .prediction, .summary { background: rgba(255,255,255,0.09); backdrop-filter: blur(16px); border-radius: 22px; padding: 25px; margin: 24px auto; max-width: 900px; box-shadow: 0 4px 24px #241a9e22; position: relative; border: 1.8px solid #0fe7c457; z-index: 1;}
+    .sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 0;}
+    .sensor-item { background: rgba(255,255,255,0.14); border-radius: 15px; border: 1px solid #23f9ed2b; padding: 20px; text-align: center; transition: transform 0.3s; box-shadow: 0 0 16px #34ffc522; position: relative; overflow: hidden;}
+    .sensor-item:hover { transform: scale(1.06) rotate(-1deg); box-shadow: 0 0 28px #00ffe9b9;}
+    .sensor-value { font-size: 2.1em; font-weight: bold; color: #0fe7c4; margin: 10px 0; text-shadow: 0 0 8px #0fe7c455, 0 0 4px #fff; position: relative; z-index: 2;}
+    .sensor-label { font-size: 0.95em; color: #d6eef2; text-transform: uppercase; letter-spacing: 1.5px; margin: 4px 0; z-index: 2; position: relative; text-shadow: 0 0 4px #0ff3; font-weight: 700;}
+    .confidence { font-size: 1em; opacity: 0.93; margin-top: 10px; text-align: center; color: #5352ec; font-weight: 700; text-shadow: 0 0 2px #0fe7c4, 0 0 6px #5352ec44; letter-spacing: 0.5px;}
+    .prob-bar { background: #222e3c; border-radius: 10px; overflow: hidden; margin: 16px 0; height: 44px; position: relative; box-shadow: 0 0 8px #0fe7c433; display: flex; align-items: center;}
+    .prob-label { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #fff; font-size: 1em; z-index: 1; text-shadow: 0 2px 8px #252e45a1; letter-spacing: 0.7px; font-family: 'Segoe UI', Arial, sans-serif;}
+    .prob-fill { background: linear-gradient(90deg, #18b1ff 20%, #0fe7c4 80%); height: 100%; transition: width 0.5s cubic-bezier(.66,-0.21,.42,1.27); display: flex; align-items: center; justify-content: flex-end; padding-right: 22px; color: #222e3c; font-size: 1.27em; font-weight: bold; font-family: 'Segoe UI', Arial, sans-serif; text-shadow: 0 0 5px #fff, 0 0 12px #aaaaec; letter-spacing: 1.1px;}
+    .bottom-btn-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; max-width: 900px; margin: 28px auto 0 auto; width: 100%;}
+    .summary { text-shadow: 0 0 5px #3cc8be99, 0 0 4px #41efef72; color: #0fe7c4; background: rgba(20,22,39,0.62); border: 1px solid #5352ec81;}
+    .alert { padding: 15px; background: linear-gradient(90deg, #e34c64 40%, #5352ec 80%); border-radius: 10px; font-weight: 700; text-align: center; margin-top: 20px; box-shadow: 0 0 16px #e34c6467; font-size: 1.12em; letter-spacing: 1px; color: #fff; animation: pulse 2s infinite alternate; font-family: 'Segoe UI', Arial, sans-serif;}
+    @keyframes pulse { to { box-shadow: 0 0 22px #e34c64dd, 0 0 18px #5352ecb6;}}
+    canvas { max-width: 100%; margin-top: 36px; border-radius: 14px; background: rgba(34,35,54,0.53); box-shadow: 0 0 12px #0fe7c488;}
+    @media (max-width: 700px) { .card, .prediction, .summary { padding: 11px; max-width: 99%;} h1{font-size: 1.2em;} .btn{padding: 12px 20px; font-size: 1em;} .bottom-btn-row{flex-direction:column;}}
+    #page1 .intro-center { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 55vh; padding-top: 60px; width: 100%;}
+  </style>
+</head>
+<body>
+  <!-- Page 1: Intro -->
+  <div id="page1" class="section active">
+    <div class="intro-center">
+      <h1>Welcome to TinyML Smart Home</h1>
+      <p style="text-align:center; color:#abbbc2; font-size:1.15em; margin:10px 0 36px 0; font-weight:500;">
+        Experience real-time behavior detection powered by <span style="color:#0fe7c4;">edge intelligence</span>
+      </p>
+      <button class="btn" onclick="showPage('page2')" id="startBtn">
+        Start Experience
+      </button>
+    </div>
+  </div>
+
+  <!-- Page 2: Dashboard -->
+  <div id="page2" class="section">
+    <h1>Real-Time Dashboard</h1>
+    <div class="card">
+      <div class="sensor-grid">
+        <div class="sensor-item">
+          <div class="sensor-label">Temperature</div>
+          <div class="sensor-value" id="temp">--</div>
+          <div class="sensor-label">°C</div>
+        </div>
+        <div class="sensor-item">
+          <div class="sensor-label">Pressure</div>
+          <div class="sensor-value" id="pressure">--</div>
+          <div class="sensor-label">hPa</div>
+        </div>
+        <div class="sensor-item">
+          <div class="sensor-label">Air Quality</div>
+          <div class="sensor-value" id="aqi">--</div>
+          <div class="sensor-label">AQI</div>
+        </div>
+      </div>
+    </div>
+    <div class="card prediction">
+      <div id="behavior" style="text-align:center; font-size:1.1em; font-weight:700;">Loading...</div>
+      <div class="confidence" id="confidence">--</div>
+    </div>
+    <div class="card">
+      <h2>All Predictions</h2>
+      <div id="probabilities"></div>
+    </div>
+    <div class="bottom-btn-row">
+      <button class="btn" onclick="showPage('page1')">Dashboard Home</button>
+      <button class="btn" onclick="showPage('page3')">View Forecast</button>
+    </div>
+  </div>
+
+  <!-- Page 3: Summary -->
+  <div id="page3" class="section">
+    <h1>Summary & Forecast</h1>
+    <div class="summary">
+      <h2>ML Forecast Summary</h2>
+      <p style="margin-bottom:12px; font-size:1.08em; font-weight:500;">
+        Based on the sensor streams, here's your prediction for next hour. <br> Expect activity spikes during cooking, and variable sensor values due to open windows/weather!
+      </p>
+      <div class="alert">
+        Alert: Sustained high movement detected in kitchen.<br>Check for appliances left ON.
+      </div>
+      <div style="margin-top:28px;">
+        <ul style="list-style:square inside; padding-left:0; color:#0fe7c4; font-weight:600; letter-spacing:0.5px;">
+          <li>High activity: 07:00-08:00 AM, 12:30-1:30 PM</li>
+          <li>Cooking detected: 08:05-08:20 AM, 1:00-1:15 PM</li>
+          <li>Low movement: 11:00-12:00 AM (possible rest)</li>
+          <li>Window open event: 07:40 AM, 01:05 PM</li>
+          <li>Temperature peaks at 08:10 AM, 01:20 PM</li>
+        </ul>
+      </div>
+    </div>
+    <canvas id="forecastChart" width="800" height="400"></canvas>
+    <div class="bottom-btn-row">
+      <button class="btn" onclick="showPage('page2')">Back to Dashboard</button>
+    </div>
+  </div>
+
+  <script>
+    function showPage(id) {
+      document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      if(id === 'page3') setTimeout(drawForecastChart, 350);
+    }
+    function updateProbBars(predictions) {
+      const container = document.getElementById('probabilities');
+      container.innerHTML = '';
+      for(const k in predictions){
+        const v = predictions[k];
+        const width = Math.round(v*100);
+        const bar = document.createElement('div');
+        bar.className = 'prob-bar';
+        bar.innerHTML = `
+          <div class="prob-label">${k.replace(/_/g, ' ').toUpperCase()}</div>
+          <div class="prob-fill" style="width:${width}%;"><span>${width}%</span></div>
+        `;
+        container.appendChild(bar);
+      }
+    }
+    function updateData() {
+      fetch('/data')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('temp').textContent = data.temp.toFixed(1);
+        document.getElementById('pressure').textContent = data.pressure.toFixed(1);
+        document.getElementById('aqi').textContent = data.aqi;
+        document.getElementById('behavior').textContent = "Detected: " + (data.prediction?.replace(/_/g,' ')||"-");
+        document.getElementById('confidence').textContent = 'Confidence: ' + Math.round((data.probabilities[data.prediction] || 0)*100) + '%';
+        updateProbBars(data.probabilities);
+      }).catch(()=>{
+        document.getElementById('temp').textContent = "--";
+        document.getElementById('pressure').textContent = "--";
+        document.getElementById('aqi').textContent = "--";
+        document.getElementById('behavior').textContent = "Loading...";
+        document.getElementById('confidence').textContent = "--";
+        updateProbBars({"high_activity":0.3,"cooking":0.22,"away":0.11,"resting":0.13,"window_open":0.14,"chill":0.1});
+      });
+    }
+    setInterval(()=>{
+      if(document.getElementById('page2').classList.contains('active')) updateData();
+    },1500);
+    updateData();
+
+    // DUMMY DATA FOR FORECAST CHART
+    let forecastChart;
+    function drawForecastChart() {
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      if(forecastChart) forecastChart.destroy();
+      forecastChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [
+            "07:00", "07:20", "07:40", "08:00", "08:20", "08:40",
+            "09:00", "12:30", "12:50", "13:10", "13:30", "13:50"
+          ],
+          datasets: [
+            {
+              label: 'Activity Level',
+              data: [20, 35, 65, 80, 70, 55, 30, 60, 85, 80, 40, 28],
+              fill: true,
+              borderColor: '#0fe7c4',
+              backgroundColor: 'rgba(15,231,196,0.11)',
+              pointBorderColor: '#5452ec',
+              pointBackgroundColor: '#18b1ff',
+              tension: 0.36,
+              borderWidth: 3,
+            },
+            {
+              label: 'Temperature (°C)',
+              data: [22, 23, 25, 27, 29, 27, 24, 28, 30, 31, 28, 25],
+              fill: false,
+              borderColor: '#18b1ff',
+              backgroundColor: 'rgba(24,177,255,0.13)',
+              pointBorderColor: '#5352ec',
+              pointBackgroundColor: '#daf9ff',
+              tension: 0.37,
+              borderWidth: 2,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          scales: {
+            y: {
+              position: 'left',
+              ticks: { color: '#0fe7c4', font: { weight:700 }},
+              beginAtZero: true,
+              grid: { color:"rgba(120,163,245,0.14)" },
+              title: { display: true, text: "Activity Score", color:'#0fe7c4', font:{weight:800}}
+            },
+            y1: {
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: "Temperature (°C)", color:'#18b1ff', font:{weight:700}},
+              ticks: { color: '#18b1ff', font: {weight:600} },
+              min: 20, max: 35,
+            },
+            x: {
+              ticks: { color: '#5352ec', font:{weight:700} },
+              grid: { color:"rgba(120,163,245,0.09)" },
+              title: { display: true, text: "Time", color:'#5352ec', font:{weight:700}}
+            }
+          },
+          plugins: {
+            legend: { labels:{color:'#0fe7c4', font:{weight:700, size:17}}, display: true },
+            tooltip: {
+              enabled: true,
+              backgroundColor: "#302b63",
+              borderColor: "#5352ec",
+              borderWidth: 2,
+              titleColor: "#0fe7c4",
+              bodyColor: "#fff"
+            }
+          },
+          animation: {
+            duration: 1400,
+            easing: 'easeInOutCubic'
+          }
+        }
+      });
+    }
+    if(document.getElementById('page3').classList.contains('active')) drawForecastChart();
+  </script>
+</body>
+</html>
